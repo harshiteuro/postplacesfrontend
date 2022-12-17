@@ -1,4 +1,4 @@
-import React ,{ useEffect,useState }from 'react';
+import React ,{ useContext, useEffect,useState }from 'react';
 import {useParams} from 'react-router-dom';
 import Input from '../../shared/components/FormElements/Input';
 import Button from '../../shared/components/FormElements/Button';
@@ -6,35 +6,17 @@ import { VALIDATOR_REQUIRE , VALIDATOR_MINLENGTH } from '../../shared/util/valid
 import './PlaceForm.css';
 import { useForm } from '../../shared/hooks/form-hook';
 import Card from '../../shared/components/UIElements/Card';
-const DUMMY_PLACES=[
-    {
-        id:'p1',
-        title:'Cyber Building',
-        description:'For Software enginners',
-        imageUrl:'https://media.istockphoto.com/id/486334510/photo/new-york-city-skyline.jpg?s=612x612&w=0&k=20&c=RkcUiEmZYarBPnQW8qm7GUJEegE24Molcl2ijMlY3kQ=',
-        address:'New York, NY 10001, USA',
-        location:{
-            lat:40.7485452,
-            lng:-73.9857635
-        },
-        creator:'u1'
-    },
-    {
-        id:'p2',
-        title:'Cyber Building',
-        description:'For Software enginners',
-        imageUrl:'https://media.istockphoto.com/id/486334510/photo/new-york-city-skyline.jpg?s=612x612&w=0&k=20&c=RkcUiEmZYarBPnQW8qm7GUJEegE24Molcl2ijMlY3kQ=',
-        address:'New York, NY 10001, USA',
-        location:{
-            lat:40.7485452,
-            lng:-73.9857635
-        },
-        creator:'u2'
-    }
-];
+import { useHttpClient } from '../../shared/hooks/http-hook';
+import ErrorModal from '../../shared/components/UIElements/ErrorModal';
+import LoadingSpinner from '../../shared/components/UIElements/LoadingSpinner';
+import { useNavigate } from 'react-router-dom';
+import { AuthContext } from '../../shared/context/auth-context';
 
 const UpdatePlace=()=>{
-    const [isLoading,setIsLoading]=useState(true);
+    const auth=useContext(AuthContext);
+    const {isLoading,error,sendRequest,clearError}=useHttpClient();
+    const [loadedPlaces,setLoadedPlaces]=useState();
+
     const placeId=useParams().placeId;
     const [formState,inputHandler,setFormData] = useForm({
         title:{
@@ -47,48 +29,67 @@ const UpdatePlace=()=>{
         }
     },false);
 
-    const identifiedPlace=DUMMY_PLACES.find(p=>p.id===placeId);
     useEffect(()=>{
-        if(identifiedPlace){
-            setFormData({
-                title:{
-                    value:identifiedPlace.title,
-                    isValid:true
-                },
-                description:{
-                    value:identifiedPlace.description,
-                    isValid:true
-                }
-            },true);
+        const fetchPlace=async ()=>{
+            try{    
+                const responseData=await sendRequest(`${process.env.REACT_APP_BACKEND_URL}/places/${placeId}`);
+                setLoadedPlaces(responseData.place);
+                setFormData({
+                    title:{
+                        value:responseData.place.title,
+                        isValid:true
+                    },
+                    description:{
+                        value:responseData.place.description,
+                        isValid:true
+                    }
+                },true);
+            }
+            catch(err){}
         }
-        
-        setIsLoading(false);
-    },[setFormData,identifiedPlace]);
-    
-    const placeUpdateSubmitHandler=event=>{
+        fetchPlace();
+    },[sendRequest,placeId,setFormData])
+    const navigate = useNavigate();
+    const placeUpdateSubmitHandler=async event=>{
         event.preventDefault();
+        try{
+            await sendRequest(`${process.env.REACT_APP_BACKEND_URL}/places/${placeId}`,'PATCH',JSON.stringify({
+                title:formState.inputs.title.value,
+                description:formState.inputs.description.value
+            }),
+            {
+                'Content-Type':'application/json',
+                'Authorization':'Bearer '+auth.token
+            }
+            );
+            navigate('/'+auth.userId+'/places');
+        }catch(err){} 
+    };
+
+    if(isLoading){
+        return (
+            <div className='center'>
+                <LoadingSpinner></LoadingSpinner>
+            </div>
+        );
     }
-    
-    if(!identifiedPlace){
+    if(!loadedPlaces && !error){
         return (
         <Card>
         <div className='center'><h2>Could not find place!</h2></div>
         </Card>
         );
     }
-    if(isLoading){
-        return (
-            <div className='center'>
-                <h2>Loading...</h2>
-            </div>
-        );
-    }
     return (
-        <form className='place-form' onSubmit={placeUpdateSubmitHandler}>
-            <Input id="title" element="input" type="text" label="Title" validators={[VALIDATOR_REQUIRE()]} errorText="Please enter a valid title" onInput={inputHandler} initialValue={formState.inputs.title.value} initialValid={formState.inputs.title.isValid}></Input>
-            <Input id="description" element="textarea" label="Description" validators={[VALIDATOR_MINLENGTH(5)]} errorText="Please enter a valid description. (at least 5 characters)" onInput={inputHandler} initialValue={formState.inputs.description.value} initialValid={formState.inputs.description.isValid}></Input>
+        <>
+        <ErrorModal error={error} onClear={clearError}></ErrorModal>
+        {!isLoading && loadedPlaces && <form className='place-form' onSubmit={placeUpdateSubmitHandler}>
+            <Input id="title" element="input" type="text" label="Title" validators={[VALIDATOR_REQUIRE()]} errorText="Please enter a valid title" onInput={inputHandler} initialValue={loadedPlaces.title} initialValid={true}></Input>
+            <Input id="description" element="textarea" label="Description" validators={[VALIDATOR_MINLENGTH(5)]} errorText="Please enter a valid description. (at least 5 characters)" onInput={inputHandler} initialValue={loadedPlaces.description} initialValid={true}></Input>
             <Button type="submit" disabled={!formState.isValid}>UPDATE PLACE</Button>
         </form>
+        }
+        </>
     );
 }
 

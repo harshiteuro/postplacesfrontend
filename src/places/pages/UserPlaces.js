@@ -1,37 +1,36 @@
-import React from 'react';
+import React,{useEffect,useState} from 'react';
 import { useParams } from 'react-router-dom';
 import PlaceList from '../components/PlaceList';
-
-const DUMMY_PLACES=[
-    {
-        id:'p1',
-        title:'Cyber Building',
-        description:'For Software enginners',
-        imageUrl:'https://media.istockphoto.com/id/486334510/photo/new-york-city-skyline.jpg?s=612x612&w=0&k=20&c=RkcUiEmZYarBPnQW8qm7GUJEegE24Molcl2ijMlY3kQ=',
-        address:'New York, NY 10001, USA',
-        location:{
-            lat:40.7485452,
-            lng:-73.9857635
-        },
-        creator:'u1'
-    },
-    {
-        id:'p2',
-        title:'Cyber Building',
-        description:'For Software enginners',
-        imageUrl:'https://media.istockphoto.com/id/486334510/photo/new-york-city-skyline.jpg?s=612x612&w=0&k=20&c=RkcUiEmZYarBPnQW8qm7GUJEegE24Molcl2ijMlY3kQ=',
-        address:'New York, NY 10001, USA',
-        location:{
-            lat:40.7485452,
-            lng:-73.9857635
-        },
-        creator:'u2'
-    }
-];
+import { useHttpClient } from '../../shared/hooks/http-hook';
+import ErrorModal from '../../shared/components/UIElements/ErrorModal';
+import LoadingSpinner from '../../shared/components/UIElements/LoadingSpinner';
 
 const UserPlaces=()=>{
+    const [loadedPlaces,setLoadedPlaces]=useState();
+    const {isLoading,error,sendRequest,clearError}=useHttpClient();
     const userId=useParams().userId;
-    const loadedPlaces=DUMMY_PLACES.filter(place=>place.creator===userId);
-    return <PlaceList items={loadedPlaces}></PlaceList>
+
+    useEffect(()=>{
+        const fetchPlaces=async()=>{
+            try{
+                const responseData=await sendRequest(`${process.env.REACT_APP_BACKEND_URL}/places/user/${userId}`);  
+                setLoadedPlaces(responseData.places);
+            }
+            catch(err){}
+        };
+        fetchPlaces();
+    },[sendRequest,userId]);
+
+    const placeDeletedHandler=(deletedPlaceId)=>{
+        setLoadedPlaces(prevPlaces=>prevPlaces.filter(place=>place.id!==deletedPlaceId));
+    }
+
+    return (
+        <>
+    <ErrorModal error={error} onClear={clearError}></ErrorModal>
+    {isLoading && (<div className='center'><LoadingSpinner></LoadingSpinner></div>)}
+    {!isLoading && loadedPlaces && <PlaceList items={loadedPlaces} onDeletePlace={placeDeletedHandler}></PlaceList>}
+    </>
+    );
 }
 export default UserPlaces;
